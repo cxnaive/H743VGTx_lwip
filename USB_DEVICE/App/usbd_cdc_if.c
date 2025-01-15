@@ -323,7 +323,8 @@ void usb_printf(const char* format,...){
   va_start(args, format);
   uint32_t transmit_len = vsnprintf((char*) char_buf, USB_PRINTF_LEN_MAX, format, args);
   va_end(args);
-  CDC_Transmit_HS((uint8_t*)char_buf, (uint16_t)transmit_len);
+  while (CDC_Transmit_HS((uint8_t*)char_buf, (uint16_t)transmit_len) == USBD_BUSY);
+   
 }
 /* USER CODE END PRIVATE_FUNCTIONS_IMPLEMENTATION */
 
