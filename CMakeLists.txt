@@ -12,6 +12,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
 
+add_definitions(-DPTPD_DBG -DHAL_ETH_USE_PTP)
 
 # Define the build type
 if(NOT CMAKE_BUILD_TYPE)
@@ -48,11 +49,24 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
+    ptp/ptpd.c
+    ptp/gptp.c
+    ptp/arith.c
+    ptp/bmc.c
+    ptp/protocol.c
+    ptp/dep/ptpd_dep.c
+    ptp/dep/msg.c
+    ptp/dep/net.c
+    ptp/dep/servo.c
+    ptp/dep/startup.c
+    ptp/dep/sys_time.c
+    ptp/dep/timer.c
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
+    ptp
 )
 
 # Add project symbols (macros)

@@ -1,5 +1,14 @@
 {
     "files.associations": {
-        "compare": "c"
+        "compare": "c",
+        "ip.h": "c",
+        "gptp.h": "c",
+        "netif.h": "c",
+        "pbuf.h": "c",
+        "usbd_cdc_if.h": "c",
+        "ptpd.h": "c",
+        "ptpd_dep.h": "c",
+        "datatypes.h": "c",
+        "ethernet.h": "c"
     }
 }

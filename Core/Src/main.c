@@ -25,6 +25,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "usbd_cdc_if.h"
+#include "ptpd.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -344,6 +345,8 @@ void StartDefaultTask(void *argument)
   /* init code for USB_DEVICE */
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 5 */
+  ptpd_init();
+  osDelay(1000);
   /* Infinite loop */
   int led_cnt = 0;
   for(;;)
@@ -353,8 +356,11 @@ void StartDefaultTask(void *argument)
       HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
       led_cnt = 0;
     }
+    ptpd_task();
+    updatePTPTimers();
     osDelay(1);
   }
+  
   /* USER CODE END 5 */
 }
 
@@ -380,7 +386,7 @@ void StartAdcTask(void *argument)
 	  HAL_ADC_PollForConversion(&hadc3, 10);	//等待转换完成,10ms表示超时时间
 	  adc_value = HAL_ADC_GetValue(&hadc3);	//读取ADC转换数据,16位数据）
     cpu_temp = ((110.0f - 30.0f) / (TS_CAL2 - TS_CAL1)) * (adc_value - TS_CAL1) + 30.0f;
-    usb_printf("cpu_temp: %lf\n", cpu_temp);
+    // usb_printf("cpu_temp: %lf\n", cpu_temp);
     osDelay(500);
   }
   /* USER CODE END StartAdcTask */
