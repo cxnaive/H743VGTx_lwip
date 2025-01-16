@@ -129,7 +129,7 @@ static int8_t CDC_Receive_HS(uint8_t* pbuf, uint32_t *Len);
 static int8_t CDC_TransmitCplt_HS(uint8_t *pbuf, uint32_t *Len, uint8_t epnum);
 
 /* USER CODE BEGIN PRIVATE_FUNCTIONS_DECLARATION */
-
+int host_port_open = 0;
 /* USER CODE END PRIVATE_FUNCTIONS_DECLARATION */
 
 /**
@@ -231,7 +231,8 @@ static int8_t CDC_Control_HS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
     break;
 
   case CDC_SET_CONTROL_LINE_STATE:
-
+    USBD_SetupReqTypedef* req = (USBD_SetupReqTypedef*)pbuf;
+    host_port_open = req->wValue & 0x001 != 0;
     break;
 
   case CDC_SEND_BREAK:
@@ -318,7 +319,7 @@ static int8_t CDC_TransmitCplt_HS(uint8_t *Buf, uint32_t *Len, uint8_t epnum)
 #define USB_PRINTF_LEN_MAX 100
 static uint8_t char_buf[USB_PRINTF_LEN_MAX];
 void usb_printf(const char* format,...){
-  
+  if(hUsbDeviceHS.dev_state != USBD_STATE_CONFIGURED || !host_port_open) return;
   va_list args;
   va_start(args, format);
   uint32_t transmit_len = vsnprintf((char*) char_buf, USB_PRINTF_LEN_MAX, format, args);
