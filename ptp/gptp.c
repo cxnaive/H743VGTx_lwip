@@ -138,7 +138,7 @@ ssize_t netRecv(octet_t *buf, TimeInternal *time, BufQueue *msgQueue)
 	if (time != NULL)
 	{
 #if LWIP_PTP
-		usb_printf("recv ts: %u %u\n", p->time_sec, p->time_nsec);
+		// usb_printf("recv ts: %u %u\n", p->time_sec, p->time_nsec);
 
 		time->seconds = p->time_sec;
 		time->nanoseconds = p->time_nsec;
@@ -211,7 +211,7 @@ ssize_t netSendL2(NetPath *netPath, const octet_t *buf, int16_t  length, TimeInt
 
     if (time != NULL)
 	{
-#if LWIP_PTP
+#if LWIP_PTP_TX
 		time->seconds = p->time_sec;
 		time->nanoseconds = p->time_nsec;
 		usb_printf("send ts: %u %u\n", p->time_sec, p->time_nsec);

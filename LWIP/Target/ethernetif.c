@@ -286,19 +286,19 @@ static void low_level_init(struct netif *netif)
 
   /* create the task that handles the ETH_MAC */
 /* USER CODE BEGIN OS_THREAD_NEW_CMSIS_RTOS_V2 */
-  ETH_DMAConfigTypeDef dma_config = {0};
-  dma_config.DMAArbitration = ETH_DMAARBITRATION_TX1_RX1;
-  dma_config.AddressAlignedBeats = ENABLE;
-  dma_config.BurstMode = ETH_BURSTLENGTH_UNSPECIFIED;
-  dma_config.RebuildINCRxBurst = ENABLE;  /// ???
-  dma_config.PBLx8Mode = DISABLE;
-  dma_config.TxDMABurstLength = ETH_TXDMABURSTLENGTH_32BEAT;
-  dma_config.SecondPacketOperate = ENABLE;
-  dma_config.RxDMABurstLength = ETH_RXDMABURSTLENGTH_32BEAT;
-  dma_config.FlushRxPacket = ENABLE;
-  dma_config.TCPSegmentation = DISABLE;
-  dma_config.MaximumSegmentSize = 0;
-  HAL_ETH_SetDMAConfig(&heth, &dma_config);
+  // ETH_DMAConfigTypeDef dma_config = {0};
+  // dma_config.DMAArbitration = ETH_DMAARBITRATION_TX1_RX1;
+  // dma_config.AddressAlignedBeats = ENABLE;
+  // dma_config.BurstMode = ETH_BURSTLENGTH_UNSPECIFIED;
+  // dma_config.RebuildINCRxBurst = ENABLE;  /// ???
+  // dma_config.PBLx8Mode = DISABLE;
+  // dma_config.TxDMABurstLength = ETH_TXDMABURSTLENGTH_32BEAT;
+  // dma_config.SecondPacketOperate = ENABLE;
+  // dma_config.RxDMABurstLength = ETH_RXDMABURSTLENGTH_32BEAT;
+  // dma_config.FlushRxPacket = ENABLE;
+  // dma_config.TCPSegmentation = DISABLE;
+  // dma_config.MaximumSegmentSize = 0;
+  // HAL_ETH_SetDMAConfig(&heth, &dma_config);
   netif->flags |=  NETIF_FLAG_IGMP;
 
 
@@ -414,7 +414,7 @@ static err_t low_level_output(struct netif *netif, struct pbuf *p)
   err_t errval = ERR_OK;
   ETH_BufferTypeDef Txbuffer[ETH_TX_DESC_CNT] = {0};
 
-#ifdef LWIP_PTP
+#ifdef LWIP_PTP_TX
   bool is_timestamp_requested = p->time_sec == PTP_TIMESTAMP_RECORD_MAGIC && p->time_nsec == PTP_TIMESTAMP_RECORD_MAGIC;
 #endif
 
@@ -450,7 +450,7 @@ static err_t low_level_output(struct netif *netif, struct pbuf *p)
   do
   {
 
-#ifdef LWIP_PTP
+#ifdef LWIP_PTP_TX
     if(is_timestamp_requested){
       HAL_ETH_PTP_InsertTxTimestamp(&heth);
     }
@@ -458,12 +458,13 @@ static err_t low_level_output(struct netif *netif, struct pbuf *p)
 
     if(HAL_ETH_Transmit_IT(&heth, &TxConfig) == HAL_OK)
     {
-#ifdef LWIP_PTP
+#ifdef LWIP_PTP_TX
       if(is_timestamp_requested){
         osSemaphoreAcquire(TxPktSemaphore, ETHIF_TX_TIMEOUT);
         HAL_ETH_ReleaseTxPacket(&heth);
         p->time_sec = heth.TxTimestamp.TimeStampHigh;
         p->time_nsec = SubsecondToNanosecond(heth.TxTimestamp.TimeStampLow);
+        usb_printf("send ts: %u %u\n",p->time_sec, p->time_nsec);
       }
 #endif
       errval = ERR_OK;
