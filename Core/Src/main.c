@@ -60,6 +60,13 @@ const osThreadAttr_t adcTask_attributes = {
   .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
+/* Definitions for triggerTask */
+osThreadId_t triggerTaskHandle;
+const osThreadAttr_t triggerTask_attributes = {
+  .name = "triggerTask",
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityAboveNormal,
+};
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -71,6 +78,7 @@ static void MX_GPIO_Init(void);
 static void MX_ADC3_Init(void);
 void StartDefaultTask(void *argument);
 void StartAdcTask(void *argument);
+void StartTriggerTask(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -153,6 +161,9 @@ int main(void)
 
   /* creation of adcTask */
   adcTaskHandle = osThreadNew(StartAdcTask, NULL, &adcTask_attributes);
+
+  /* creation of triggerTask */
+  triggerTaskHandle = osThreadNew(StartTriggerTask, NULL, &triggerTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -313,7 +324,17 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(TRG_1_GPIO_Port, TRG_1_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, LED1_Pin|LED2_Pin|LED3_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : TRG_1_Pin */
+  GPIO_InitStruct.Pin = TRG_1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(TRG_1_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LED1_Pin LED2_Pin LED3_Pin */
   GPIO_InitStruct.Pin = LED1_Pin|LED2_Pin|LED3_Pin;
@@ -390,6 +411,32 @@ void StartAdcTask(void *argument)
     osDelay(500);
   }
   /* USER CODE END StartAdcTask */
+}
+
+/* USER CODE BEGIN Header_StartTriggerTask */
+/**
+* @brief Function implementing the triggerTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartTriggerTask */
+void StartTriggerTask(void *argument)
+{
+  /* USER CODE BEGIN StartTriggerTask */
+  /* Infinite loop */
+  osDelay(4000);
+  TickType_t xLastWakeTime = xTaskGetTickCount();
+  const TickType_t xDelay5ms = pdMS_TO_TICKS(5);
+  int trigger_cnt = 0;
+  for(;;)
+  {
+    if (trigger_cnt % 4 == 0){
+      HAL_GPIO_TogglePin(TRG_1_GPIO_Port, TRG_1_Pin);
+    }
+    ++trigger_cnt;
+    vTaskDelayUntil(&xLastWakeTime, xDelay5ms);
+  }
+  /* USER CODE END StartTriggerTask */
 }
 
  /* MPU Configuration */
