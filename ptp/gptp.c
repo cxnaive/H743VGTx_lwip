@@ -8,7 +8,74 @@
 #include "usbd_cdc_if.h"
 #include "ptpd.h"
 
+#define GPTP_BUF_SIZE 200
+#define GPTP_BUF_POOL_SIZE 10
+typedef struct gptp_buf_struct {
+	s32_t buf_len;
+	s32_t pool_idx;
+#ifdef LWIP_PTP
+	s32_t time_sec;
+	s32_t time_nsec;
+#endif
+	uint8_t payload[GPTP_BUF_SIZE];	
+} gptp_buf;
 
+gptp_buf buf_pool[GPTP_BUF_POOL_SIZE];
+int buf_pool_valid[GPTP_BUF_POOL_SIZE];
+
+void gptp_bufpool_init() {
+	for(int i = 0;i < GPTP_BUF_POOL_SIZE;++i){
+		buf_pool_valid[i] = 1;
+		buf_pool[i].pool_idx = i;
+	}
+}
+
+gptp_buf* gptp_bufpool_getvalid(){
+	for(int i = 0;i < GPTP_BUF_POOL_SIZE;++i){
+		if(buf_pool_valid[i]){
+			return buf_pool + i;
+		}
+	}
+	return NULL;
+}
+
+void gptp_bufpool_release(void* p){
+	if(p == NULL) return;
+	gptp_buf* gptp_p = (gptp_buf*) p;
+	// usb_printf("release: %d\n", gptp_p->pool_idx);
+	buf_pool_valid[gptp_p->pool_idx] = 1;
+}
+
+gptp_buf* gptp_bufpool_push(struct pbuf *p){
+	gptp_buf* buf_valid = gptp_bufpool_getvalid();
+	if(buf_valid == NULL) return NULL;
+	if(p->tot_len > GPTP_BUF_SIZE){
+		usb_printf("pbuf_len: %d\n", p->tot_len);
+		return NULL;
+	} 
+	buf_pool_valid[buf_valid->pool_idx] = 0;
+
+	buf_valid->buf_len = p->tot_len;
+	struct pbuf* pcopy = p;
+	int j = 0;
+	for (int i = 0; i < buf_valid->buf_len; i++) {
+		// Copy the next byte in the payload.
+		buf_valid->payload[i] = ((u8_t *)(pcopy->payload + sizeof(struct eth_hdr)))[j++];
+
+		// Skip to the next buffer in the payload?
+		if (j == pcopy->len)
+		{
+			// Move to the next buffer.
+			pcopy = pcopy->next;
+			j = 0;
+		}
+	}
+#ifdef LWIP_PTP
+	buf_valid->time_sec = p->time_sec;
+	buf_valid->time_nsec = p->time_nsec;
+#endif
+	return buf_valid;
+}
 
 void* callback_arg;
 void setCallbackArg(void* arg){
@@ -48,9 +115,9 @@ err_t gptp_input(struct pbuf *p, struct netif *netif){
         // usb_printf("netRecvL2!\n");
         if(callback_arg != NULL){
             netRecvL2Callback(callback_arg, p, netif);
+			// pbuf_free(p);
         }
-        // pbuf_free(p);
-        return ERR_OK;
+        // return ERR_OK;
     }
     
 
@@ -67,6 +134,11 @@ err_t gptp_input(struct pbuf *p, struct netif *netif){
 void netRecvL2Callback(void* arg, struct pbuf *p, struct netif *netif){
 	NetPath *netPath = (NetPath *) arg;
 	
+	gptp_buf* p_gptp = gptp_bufpool_push(p);
+	if(p_gptp == NULL){
+		ERROR("netRecvL2Callback: gptp pool full\n");
+        return;
+	}
 
 	octet_t* buf = (octet_t*) (p->payload + sizeof(struct eth_hdr));
 
@@ -75,9 +147,9 @@ void netRecvL2Callback(void* arg, struct pbuf *p, struct netif *netif){
     switch (messageType) {
         case 0xb:
         case 0xc:
-            if (!netQPut(&netPath->generalQ, p)) {
-                pbuf_free(p);
+            if (!netQPut(&netPath->generalQ, p_gptp)) {
                 ERROR("netRecvL2General: queue full\n");
+				gptp_bufpool_release(p_gptp);
                 return;
             }
             // usb_printf("PTPv2 Packet General type:%02x!\n", messageType);
@@ -87,17 +159,17 @@ void netRecvL2Callback(void* arg, struct pbuf *p, struct netif *netif){
         case 0x3:
         case 0x8:
         case 0xa:
-            if (!netQPut(&netPath->eventQ, p)) {
-                pbuf_free(p);
+            if (!netQPut(&netPath->eventQ, p_gptp)) {
                 ERROR("netRecvL2Event: queue full\n");
+				gptp_bufpool_release(p_gptp);
                 return;
             }
             // usb_printf("PTPv2 Packet Event type:%02x!\n", messageType);
             break;
     
         default:
-            pbuf_free(p);
             ERROR("netRecvL2Event: queue full\n");
+			gptp_bufpool_release(p_gptp);
             return;
             break;
     }
@@ -108,30 +180,32 @@ void netRecvL2Callback(void* arg, struct pbuf *p, struct netif *netif){
 ssize_t netRecv(octet_t *buf, TimeInternal *time, BufQueue *msgQueue)
 {
 	int i;
-	int j;
 	u16_t length;
-	struct pbuf *p;
-	struct pbuf *pcopy;
+	gptp_buf *p;
+	// struct pbuf *pcopy;
 
 	/* Get the next buffer from the queue. */
-	if ((p = (struct pbuf*) netQGet(msgQueue)) == NULL)
+	if ((p = (gptp_buf*) netQGet(msgQueue)) == NULL)
 	{
+		gptp_bufpool_release(p);
 		return 0;
 	}
 
+	// usb_printf("gptp_buf: %d %d\n", p->buf_len, p->pool_idx);
+
 	/* Verify that we have enough space to store the contents. */
-	if (p->tot_len > PACKET_SIZE)
+	if (p->buf_len > PACKET_SIZE)
 	{
+		gptp_bufpool_release(p);
 		ERROR("netRecv: received truncated message\n");
-		pbuf_free(p);
 		return 0;
 	}
 
 	/* Verify there is contents to copy. */
-	if (p->tot_len == 0)
+	if (p->buf_len == 0)
 	{
+		gptp_bufpool_release(p);
 		ERROR("netRecv: received empty packet\n");
-		pbuf_free(p);
 		return 0;
 	}
 
@@ -148,27 +222,16 @@ ssize_t netRecv(octet_t *buf, TimeInternal *time, BufQueue *msgQueue)
 	}
 
 	/* Get the length of the buffer to copy. */
-	length = p->tot_len;
+	length = p->buf_len;
 
 	/* Copy the pbuf payload into the buffer. */
-	pcopy = p;
-	j = 0;
-	for (i = 0; i < length; i++)
-	{
+	for (i = 0; i < length; i++) {
 		// Copy the next byte in the payload.
-		buf[i] = ((u8_t *)(pcopy->payload + sizeof(struct eth_hdr)))[j++];
-
-		// Skip to the next buffer in the payload?
-		if (j == pcopy->len)
-		{
-			// Move to the next buffer.
-			pcopy = pcopy->next;
-			j = 0;
-		}
+		buf[i] = p->payload[i];
 	}
 
 	/* Free up the pbuf (chain). */
-	pbuf_free(p);
+	gptp_bufpool_release(p);
 
 	return length;
 }
@@ -245,6 +308,7 @@ bool netShutdown(NetPath *netPath){
 bool netInit(NetPath *netPath, PtpClock *ptpClock){
 	netQInit(&netPath->eventQ);
 	netQInit(&netPath->generalQ);
+	gptp_bufpool_init();
     //gptp MAC Addr
     netPath->peerMulticastMAC[0] = 0x01U;
     netPath->peerMulticastMAC[1] = 0x80U;

@@ -6,6 +6,7 @@
 
 err_t gptp_tcpip_input(struct pbuf *p, struct netif *inp);
 err_t gptp_input(struct pbuf *p, struct netif *netif);
+void gptp_bufpool_release(void* p);
 void setCallbackArg(void* arg);
 void netRecvL2Callback(void* arg, struct pbuf *p, struct netif *netif);
 ssize_t netSendL2(NetPath *netPath, const octet_t *buf, int16_t  length, TimeInternal* time);

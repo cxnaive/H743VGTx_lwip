@@ -62,7 +62,7 @@ void netQEmpty(BufQueue *queue)
 	{
 		// Get the buffer from the queue.
 		queue->tail = (queue->tail + 1) & PBUF_QUEUE_MASK;
-		pbuf_free(queue->pbuf[queue->tail]);
+		gptp_bufpool_release(queue->pbuf[queue->tail]);
 	}
 	
 	//sys_mutex_unlock(&queue->mutex);
