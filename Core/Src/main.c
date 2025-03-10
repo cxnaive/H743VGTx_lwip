@@ -26,6 +26,7 @@
 /* USER CODE BEGIN Includes */
 #include "usbd_cdc_if.h"
 #include "ptpd.h"
+#include "udp_send.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -370,12 +371,15 @@ void StartDefaultTask(void *argument)
   osDelay(1000);
   /* Infinite loop */
   int led_cnt = 0;
+  struct udp_pcb* pcb = create_udp_send(192, 168, 1, 255, 5001, 5002);
+  const char* message = "Hello UDP message!\n\r";
   for(;;)
   {
     led_cnt++;
     if(led_cnt > 500){
       HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
       led_cnt = 0;
+      do_udp_send(pcb, (void*)message, strlen(message));
     }
     ptpd_task();
     updatePTPTimers();
