@@ -26,7 +26,7 @@
 /* USER CODE BEGIN Includes */
 #include "usbd_cdc_if.h"
 #include "ptpd.h"
-#include "udp_send.h"
+#include "udp_conn.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -349,7 +349,13 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+static uint8_t recv_buf[1024] = {0};
+void example_recv_udp(void *arg, void* data, u32_t recv_len)
+{
+  if(data != NULL){
+    usb_printf("udp_recv: %s\n", (const char*)data);
+  }
+}
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -371,7 +377,9 @@ void StartDefaultTask(void *argument)
   osDelay(1000);
   /* Infinite loop */
   int led_cnt = 0;
-  struct udp_pcb* pcb = create_udp_send(192, 168, 1, 255, 5001, 5002);
+  struct udp_pcb* pcb = create_udp_send(5001);
+  ip_addr_t remote_ip = create_ip_addr(192, 168, 1, 255);
+  pcb = create_udp_recv(pcb, netif_default->ip_addr, 5001, recv_buf, 1024, example_recv_udp, NULL);
   const char* message = "Hello UDP message!\n\r";
   for(;;)
   {
@@ -379,7 +387,7 @@ void StartDefaultTask(void *argument)
     if(led_cnt > 500){
       HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
       led_cnt = 0;
-      do_udp_send(pcb, (void*)message, strlen(message));
+      do_udp_send(pcb, remote_ip, 5002, (void*)message, strlen(message));
     }
     ptpd_task();
     updatePTPTimers();

@@ -9,6 +9,7 @@
         "ptpd.h": "c",
         "ptpd_dep.h": "c",
         "datatypes.h": "c",
-        "ethernet.h": "c"
+        "ethernet.h": "c",
+        "udp_send.h": "c"
     }
 }

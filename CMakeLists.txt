@@ -61,7 +61,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ptp/dep/startup.c
     ptp/dep/sys_time.c
     ptp/dep/timer.c
-    LWIP/App/udp_send.c
+    LWIP/App/udp_conn.c
 )
 
 # Add include paths
