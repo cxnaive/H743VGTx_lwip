@@ -45,7 +45,6 @@ set(MX_Include_Dirs
 # STM32CubeMX generated application sources
 set(MX_Application_Src
     ${CMAKE_SOURCE_DIR}/LWIP/App/lwip.c
-    ${CMAKE_SOURCE_DIR}/LWIP/App/udp_conn.c
     ${CMAKE_SOURCE_DIR}/LWIP/Target/ethernetif.c
     ${CMAKE_SOURCE_DIR}/USB_DEVICE/Target/usbd_conf.c
     ${CMAKE_SOURCE_DIR}/USB_DEVICE/App/usb_device.c
@@ -204,10 +203,7 @@ set(MX_LINK_DIRS
 # Project static libraries
 set(MX_LINK_LIBS 
     STM32_Drivers
-    USB_Device_Library
-	FreeRTOS
-	LwIP
-	
+    USB_Device_Library	FreeRTOS	LwIP	
 )
 # Interface library for includes and symbols
 add_library(stm32cubemx INTERFACE)
