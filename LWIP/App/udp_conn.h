@@ -4,6 +4,7 @@
 
 typedef void (*recv_function)(void *arg, void* data, u32_t recv_len);
 
+void udp_conn_init();
 ip_addr_t create_ip_addr(u32_t a, u32_t b, u32_t c, u32_t d);
 struct udp_pcb* create_udp_send(u16_t local_port);
 struct udp_pcb *create_udp_recv(struct udp_pcb *send_pcb, ip_addr_t recv_addr, u16_t local_port, uint8_t* buffer, u32_t buffer_size, recv_function recv_fn, void *recv_fn_args);

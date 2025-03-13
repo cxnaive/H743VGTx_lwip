@@ -350,10 +350,13 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 static uint8_t recv_buf[1024] = {0};
+struct udp_pcb* send_pcb;
+ip_addr_t remote_ip;
 void example_recv_udp(void *arg, void* data, u32_t recv_len)
 {
   if(data != NULL){
-    usb_printf("udp_recv: %s\n", (const char*)data);
+    // usb_printf("%s", (const char*)data);
+    do_udp_send(send_pcb, remote_ip, 5002, recv_buf, recv_len);
   }
 }
 /* USER CODE END 4 */
@@ -376,18 +379,21 @@ void StartDefaultTask(void *argument)
   ptpd_init();
   osDelay(1000);
   /* Infinite loop */
+  udp_conn_init();
+  send_pcb = create_udp_send(5001);
+  remote_ip = create_ip_addr(192, 168, 1, 255);
+  send_pcb = create_udp_recv(send_pcb, netif_default->ip_addr, 5001, recv_buf, 1024, example_recv_udp, NULL);
+
   int led_cnt = 0;
-  struct udp_pcb* pcb = create_udp_send(5001);
-  ip_addr_t remote_ip = create_ip_addr(192, 168, 1, 255);
-  pcb = create_udp_recv(pcb, netif_default->ip_addr, 5001, recv_buf, 1024, example_recv_udp, NULL);
-  const char* message = "Hello UDP message!\n\r";
   for(;;)
   {
     led_cnt++;
+    // if(led_cnt % 2 == 0){
+    //   do_udp_send(send_pcb, remote_ip, 5002, recv_buf, 1000);
+    // }
     if(led_cnt > 500){
       HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
       led_cnt = 0;
-      do_udp_send(pcb, remote_ip, 5002, (void*)message, strlen(message));
     }
     ptpd_task();
     updatePTPTimers();

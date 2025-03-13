@@ -5,7 +5,7 @@
 #include "lwip/ip4_addr.h"
 #include "usbd_cdc_if.h"
 #include "udp_conn.h"
-#define MAX_SEND_LEN 1000
+#define MAX_SEND_LEN 1500
 #define MAX_RECV 20
 
 int registered_recv_cnt = 0;
@@ -17,6 +17,11 @@ struct registered_recv_t
     uint8_t *buffer;
     void *args;
 } recvs[MAX_RECV];
+
+struct pbuf* p_send_buffer;
+void udp_conn_init(){
+    p_send_buffer = pbuf_alloc(PBUF_TRANSPORT, MAX_SEND_LEN, PBUF_RAM);
+}
 
 void raw_recv_udp(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, u16_t port) {
     if (p != NULL) {
@@ -111,8 +116,9 @@ void do_udp_send(struct udp_pcb *pcb, ip_addr_t remote_addr, u16_t remote_port, 
         usb_printf("send length too long!!!\n");
         return;
     }
-    struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, data_len, PBUF_RAM);
-    pbuf_take(p, data, data_len);
+    struct pbuf *p = pbuf_alloc(PBUF_TRANSPORT, data_len, PBUF_REF);
+    pbuf_take(p_send_buffer, data, data_len);
+    p->payload = p_send_buffer->payload;
     udp_sendto(pcb, p, &remote_addr, remote_port);
     pbuf_free(p);
 }
