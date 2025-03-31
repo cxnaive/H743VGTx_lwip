@@ -388,13 +388,40 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 static uint8_t recv_buf[1024] = {0};
-struct udp_pcb* send_pcb;
-ip_addr_t remote_ip;
-void example_recv_udp(void *arg, void* data, u32_t recv_len)
-{
+struct udp_pcb* udp_conn_pcb;
+int cmd_recv_flag = 0;
+void pc_cmd_recv_udp(void *arg, void* data, u32_t recv_len) {
   if(data != NULL){
-    // usb_printf("%s", (const char*)data);
-    do_udp_send(send_pcb, remote_ip, 5002, recv_buf, recv_len);
+    cmd_recv_flag = 1;
+  }
+}
+void handle_cmd_recv(ip_addr_t remote_ip, uint16_t remote_port) {
+  if(cmd_recv_flag == 1){
+    cmd_recv_flag = 0;
+    char* cmd_str = (char*)recv_buf;
+    if (strncmp(cmd_str, "set ip", 6) == 0) {
+      char* ip_str = cmd_str + 7;
+      char* token = strtok(ip_str, ".");
+      uint8_t ip[4] = {0};
+      int i = 0;
+      while (token != NULL && i < 4) {
+        ip[i++] = atoi(token);
+        token = strtok(NULL, ".");
+      }
+      if (i == 4) {
+        global_config.flash_config.local_ip = create_ip_addr(ip[0], ip[1], ip[2], ip[3]).addr;
+        save_flash_config(&global_config.flash_config);
+        // netif_set_addr(netif_default, (ip_addr_t*)&global_config.flash_config.local_ip, 
+        // (ip_addr_t*)&global_config.flash_config.local_netmask, 
+        // (ip_addr_t*)&global_config.flash_config.local_gateway);
+        // netif_set_up(netif_default);
+      } else {
+        do_udp_send(udp_conn_pcb, remote_ip, remote_port, (void*)"invalid ip\n", sizeof("invalid ip\n"));
+      }
+    } else {
+      do_udp_send(udp_conn_pcb, remote_ip, remote_port, (void*)"invalid cmd\n", sizeof("invalid cmd\n"));
+    }
+    
   }
 }
 /* USER CODE END 4 */
@@ -414,28 +441,32 @@ void StartDefaultTask(void *argument)
   /* init code for USB_DEVICE */
   MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 5 */
-  // config.flash_config.local_ip = 
+  read_flash_config(&global_config.flash_config);
+  // global_config.flash_config.local_ip = create_ip_addr(192, 168, 1, 10).addr;
+  netif_set_down(netif_default);
+  netif_set_addr(netif_default, (ip_addr_t*)&global_config.flash_config.local_ip, 
+  (ip_addr_t*)&global_config.flash_config.local_netmask, 
+  (ip_addr_t*)&global_config.flash_config.local_gateway);
+  netif_set_up(netif_default);
+
   ptpd_init();
   osDelay(1000);
   /* Infinite loop */
   udp_conn_init();
-  send_pcb = create_udp_send(5001);
-  remote_ip = create_ip_addr(192, 168, 1, 255);
-  send_pcb = create_udp_recv(send_pcb, netif_default->ip_addr, 5001, recv_buf, 1024, example_recv_udp, NULL);
+  ip_addr_t remote_ip = create_ip_addr(192, 168, 1, 255);
+  udp_conn_pcb = create_udp_recv(NULL, netif_default->ip_addr, 5001, recv_buf, 1024, pc_cmd_recv_udp, NULL);
 
   int led_cnt = 0;
   for(;;)
   {
     led_cnt++;
-    // if(led_cnt % 2 == 0){
-    //   do_udp_send(send_pcb, remote_ip, 5002, recv_buf, 1000);
-    // }
     if(led_cnt > 500){
       HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
       led_cnt = 0;
     }
     ptpd_task();
     updatePTPTimers();
+    handle_cmd_recv(remote_ip, 5002);
     osDelay(1);
   }
   

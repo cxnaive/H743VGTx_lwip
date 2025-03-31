@@ -13,6 +13,7 @@
         "udp_send.h": "c",
         "stm32h7xx_hal.h": "c",
         "config.h": "c",
-        "main.h": "c"
+        "main.h": "c",
+        "stdint.h": "c"
     }
 }
