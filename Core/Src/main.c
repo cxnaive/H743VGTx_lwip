@@ -50,6 +50,8 @@ ADC_HandleTypeDef hadc3;
 
 CRC_HandleTypeDef hcrc;
 
+TIM_HandleTypeDef htim5;
+
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
 const osThreadAttr_t defaultTask_attributes = {
@@ -64,13 +66,6 @@ const osThreadAttr_t adcTask_attributes = {
   .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
-/* Definitions for triggerTask */
-osThreadId_t triggerTaskHandle;
-const osThreadAttr_t triggerTask_attributes = {
-  .name = "triggerTask",
-  .stack_size = 512 * 4,
-  .priority = (osPriority_t) osPriorityAboveNormal,
-};
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -81,9 +76,9 @@ static void MPU_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_ADC3_Init(void);
 static void MX_CRC_Init(void);
+static void MX_TIM5_Init(void);
 void StartDefaultTask(void *argument);
 void StartAdcTask(void *argument);
-void StartTriggerTask(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -136,10 +131,13 @@ int main(void)
   MX_GPIO_Init();
   MX_ADC3_Init();
   MX_CRC_Init();
+  MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
   HAL_Delay(500);
   HAL_ADCEx_Calibration_Start(&hadc3,ADC_CALIB_OFFSET,ADC_SINGLE_ENDED);
   HAL_Delay(500);
+  HAL_TIM_Base_Start_IT(&htim5);
+  HAL_TIM_OC_Start_IT(&htim5, TIM_CHANNEL_1);
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -167,9 +165,6 @@ int main(void)
 
   /* creation of adcTask */
   adcTaskHandle = osThreadNew(StartAdcTask, NULL, &adcTask_attributes);
-
-  /* creation of triggerTask */
-  triggerTaskHandle = osThreadNew(StartTriggerTask, NULL, &triggerTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -346,6 +341,65 @@ static void MX_CRC_Init(void)
 }
 
 /**
+  * @brief TIM5 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM5_Init(void)
+{
+
+  /* USER CODE BEGIN TIM5_Init 0 */
+
+  /* USER CODE END TIM5_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM5_Init 1 */
+
+  /* USER CODE END TIM5_Init 1 */
+  htim5.Instance = TIM5;
+  htim5.Init.Prescaler = 240-1;
+  htim5.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim5.Init.Period = 5000-1;
+  htim5.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim5.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim5) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim5, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_OC_Init(&htim5) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim5, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_TIMING;
+  sConfigOC.Pulse = 2500;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_OC_ConfigChannel(&htim5, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  __HAL_TIM_ENABLE_OCxPRELOAD(&htim5, TIM_CHANNEL_1);
+  /* USER CODE BEGIN TIM5_Init 2 */
+  // TIM5->CR1 &= ~TIM_CR1_UDIS;
+  /* USER CODE END TIM5_Init 2 */
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -424,6 +478,44 @@ void handle_cmd_recv(ip_addr_t remote_ip, uint16_t remote_port) {
     
   }
 }
+
+int trigger_cnt = 0;
+TimeInternal trigger_time;
+void handle_trigger_task(void) {
+  getTime(&trigger_time);
+  int trigger_us = trigger_time.nanoseconds / 1000;
+  int period = TIM5->ARR + 1;
+  int cycles = trigger_us / period;
+  int phase = trigger_us % period;
+  
+  // adjust triggrer phase to align with PTP 
+  int last_ccr = TIM5->CCR1;
+  int target_ccr = last_ccr + (period - phase);
+  if (target_ccr >= period){
+    target_ccr -= period;
+  }
+  TIM5->CCR1 = target_ccr;
+  if (target_ccr - last_ccr > period / 2){
+    TIM5->EGR |= TIM_EGR_UG; // update the timer
+  }
+  
+  int trigger_cycle = cycles + (phase > period / 2);
+  if (trigger_cycle % 8 == 0){
+    HAL_GPIO_WritePin(TRG_1_GPIO_Port, TRG_1_Pin, GPIO_PIN_SET);
+    usb_printf("trigger up: %u %u %u %u\n", trigger_time.seconds, trigger_time.nanoseconds, trigger_cnt, phase);
+  } else if (trigger_cycle % 8 == 4){
+    HAL_GPIO_WritePin(TRG_1_GPIO_Port, TRG_1_Pin, GPIO_PIN_RESET);
+    usb_printf("trigger down: %u %u %u %u\n", trigger_time.seconds, trigger_time.nanoseconds, trigger_cnt, phase);
+  }
+  ++trigger_cnt;
+}
+
+
+void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim) {
+  if (htim->Instance == TIM5) {
+    handle_trigger_task();
+  }
+}
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -499,32 +591,6 @@ void StartAdcTask(void *argument)
     osDelay(500);
   }
   /* USER CODE END StartAdcTask */
-}
-
-/* USER CODE BEGIN Header_StartTriggerTask */
-/**
-* @brief Function implementing the triggerTask thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_StartTriggerTask */
-void StartTriggerTask(void *argument)
-{
-  /* USER CODE BEGIN StartTriggerTask */
-  /* Infinite loop */
-  osDelay(4000);
-  TickType_t xLastWakeTime = xTaskGetTickCount();
-  const TickType_t xDelay5ms = pdMS_TO_TICKS(5);
-  int trigger_cnt = 0;
-  for(;;)
-  {
-    if (trigger_cnt % 4 == 0){
-      HAL_GPIO_TogglePin(TRG_1_GPIO_Port, TRG_1_Pin);
-    }
-    ++trigger_cnt;
-    vTaskDelayUntil(&xLastWakeTime, xDelay5ms);
-  }
-  /* USER CODE END StartTriggerTask */
 }
 
  /* MPU Configuration */

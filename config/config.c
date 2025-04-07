@@ -15,7 +15,7 @@ void init_config(struct flash_config_t * flash_config){
     memset(flash_config, 0, sizeof(struct flash_config_t));
     // 设置默认配置
     flash_config->version = FLASH_VERSION;
-    flash_config->local_ip = create_ip_addr(192, 168, 1, 20).addr;
+    flash_config->local_ip = create_ip_addr(192, 168, 1, 10).addr;
     flash_config->local_netmask = create_ip_addr(255, 255, 255, 0).addr;
     flash_config->local_gateway = create_ip_addr(192, 168, 1, 1).addr;
     flash_config->crc_16 = HAL_CRC_Calculate(&hcrc, (uint32_t*)flash_config, sizeof(struct flash_config_t) - 2);
