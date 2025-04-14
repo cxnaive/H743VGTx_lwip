@@ -519,6 +519,7 @@ void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim) {
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
+extern PtpClock ptpClock;
 /**
   * @brief  Function implementing the defaultTask thread.
   * @param  argument: Not used
@@ -555,6 +556,11 @@ void StartDefaultTask(void *argument)
     if(led_cnt > 500){
       HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
       led_cnt = 0;
+      if (ptpClock.portDS.portState == PTP_SLAVE){
+        HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
+      } else {
+        HAL_GPIO_WritePin(LED2_GPIO_Port, LED2_Pin, GPIO_PIN_RESET);
+      }
     }
     ptpd_task();
     updatePTPTimers();
