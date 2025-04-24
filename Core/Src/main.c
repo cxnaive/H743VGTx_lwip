@@ -442,7 +442,7 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 static uint8_t recv_buf[1024] = {0};
-struct udp_pcb* udp_conn_pcb;
+struct udp_pcb* udp_conn_pcb = NULL;
 int cmd_recv_flag = 0;
 void pc_cmd_recv_udp(void *arg, void* data, u32_t recv_len) {
   if(data != NULL){
@@ -481,6 +481,18 @@ void handle_cmd_recv(ip_addr_t remote_ip, uint16_t remote_port) {
 
 int trigger_cnt = 0;
 TimeInternal trigger_time;
+ip_addr_t trigger_remote_ip;
+uint16_t trigger_remote_port;
+void trigger_packet(const char* sensor, uint32_t seconds, uint32_t nanoseconds) {
+  if (udp_conn_pcb == NULL) {
+    return;
+  }
+  static trigger_str[64] = {0};
+  snprintf(trigger_str, sizeof(trigger_str), "trigger %s %u %u\n", sensor, seconds, nanoseconds);
+  do_udp_send(udp_conn_pcb, trigger_remote_ip, trigger_remote_port, (void*)trigger_str, strlen(trigger_str));
+}
+
+
 void handle_trigger_task(void) {
   getTime(&trigger_time);
   int trigger_us = trigger_time.nanoseconds / 1000;
@@ -502,10 +514,11 @@ void handle_trigger_task(void) {
   int trigger_cycle = cycles + (phase > period / 2);
   if (trigger_cycle % 8 == 0){
     HAL_GPIO_WritePin(TRG_1_GPIO_Port, TRG_1_Pin, GPIO_PIN_SET);
-    usb_printf("trigger up: %u %u %u %u\n", trigger_time.seconds, trigger_time.nanoseconds, trigger_cnt, phase);
+    // usb_printf("trigger up: %u %u %u %u\n", trigger_time.seconds, trigger_time.nanoseconds, trigger_cnt, phase);
+    trigger_packet("cameras", trigger_time.seconds, trigger_time.nanoseconds);
   } else if (trigger_cycle % 8 == 4){
     HAL_GPIO_WritePin(TRG_1_GPIO_Port, TRG_1_Pin, GPIO_PIN_RESET);
-    usb_printf("trigger down: %u %u %u %u\n", trigger_time.seconds, trigger_time.nanoseconds, trigger_cnt, phase);
+    // usb_printf("trigger down: %u %u %u %u\n", trigger_time.seconds, trigger_time.nanoseconds, trigger_cnt, phase);
   }
   ++trigger_cnt;
 }
@@ -547,6 +560,8 @@ void StartDefaultTask(void *argument)
   /* Infinite loop */
   udp_conn_init();
   ip_addr_t remote_ip = create_ip_addr(192, 168, 1, 255);
+  trigger_remote_ip = create_ip_addr(192, 168, 1, 255);
+  trigger_remote_port = 5004;
   udp_conn_pcb = create_udp_recv(NULL, netif_default->ip_addr, 5001, recv_buf, 1024, pc_cmd_recv_udp, NULL);
 
   int led_cnt = 0;
